@@ -6,7 +6,7 @@ import {
   UnAuthenticatedError,
 } from "../errors/index.mjs";
 import checkPermissions from "../utils/checkPermissions.mjs";
-
+import mongoose from "mongoose";
 const createJob = async (req, res) => {
   const { position, company } = req.body;
 
@@ -61,22 +61,40 @@ const updateJob = async (req, res) => {
 
 const deleteJob = async (req, res) => {
   const { id } = req.params;
-  const jobId = id 
-  
-  const job = await Job.findOne({_id:jobId})
-  console.log(job)
-  if(!job){
-    throw new NotFoundError(`No job with id:${jobId}`)
+  const jobId = id;
+
+  const job = await Job.findOne({ _id: jobId });
+  console.log(job);
+  if (!job) {
+    throw new NotFoundError(`No job with id:${jobId}`);
   }
 
-  checkPermissions(req.user,job.createdBy)
-  await Job.deleteOne({_id:jobId}) 
+  checkPermissions(req.user, job.createdBy);
+  await Job.deleteOne({ _id: jobId });
 
-  res.status(StatusCodes.OK).json({msg:'Success! Job removed'})
+  res.status(StatusCodes.OK).json({ msg: "Success! Job removed" });
 };
 
 const showStats = async (req, res) => {
-  res.send("show stats");
+  const createdBy = new mongoose.Types.ObjectId(req.user.userId);
+  let stats = await Job.aggregate([
+    { $match: { createdBy } }, 
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+  ]);
+
+  stats = stats.reduce((acc,curr)=>{
+    const {_id:title,count} = curr 
+    acc[title] = count 
+    return acc;
+  },{})
+
+  const defaultStats = {
+    pending:stats.pending || 0,
+    interview:stats.pending || 0,
+    declined:stats.declined || 0,
+  }
+  let monthlyApplications = []
+  res.status(StatusCodes.OK).json({ defaultStats,monthlyApplications });
 };
 
 export { createJob, deleteJob, getAllJobs, updateJob, showStats };
